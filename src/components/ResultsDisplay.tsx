@@ -1,5 +1,6 @@
 import React from 'react';
 import { DriverScore } from '../types';
+import { Flag } from './Flag';
 
 interface ResultsDisplayProps {
   isLoading: boolean;
@@ -53,7 +54,6 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ isLoading, resul
     );
   }
 
-  // The backend returned an empty array — none of the selected drivers raced at this circuit.
   if (results.length === 0) {
     return (
       <Container>
@@ -91,8 +91,10 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ isLoading, resul
                   </div>
                 </td>
                 <td className="p-3 font-medium">
-                  <span className="mr-3 text-2xl">{driver.country}</span>
-                  {driver.name}
+                  <span className="inline-flex items-center">
+                    <Flag emoji={driver.country} className="w-7 h-7 mr-3" />
+                    {driver.name}
+                  </span>
                 </td>
                 <td className="p-3 text-center text-gray-400">{races}</td>
                 <td className="p-3 text-right">
