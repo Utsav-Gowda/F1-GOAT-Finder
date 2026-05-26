@@ -6,20 +6,53 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>F1 GOAT Analyzer</title>
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <!--
+      Force-load the Twemoji Country Flags font.
+      Windows browsers won't render flag emojis natively, and they won't
+      auto-load a unicode-range font for these codepoints because the
+      system font (Segoe UI Emoji) "claims" to support them (it just
+      renders them as letter pairs like "GB"). The FontFace API lets us
+      explicitly load the font and add it to the document, after which
+      the browser uses it correctly for flag characters.
+    -->
+    <script>
+      (function () {
+        if (!("FontFace" in window)) return;
+        const flagFont = new FontFace(
+          "Twemoji Country Flags",
+          'url(https://cdn.jsdelivr.net/npm/country-flag-emoji-polyfill@0.1/dist/TwemojiCountryFlags.woff2) format("woff2")',
+          {
+            unicodeRange:
+              "U+1F1E6-1F1FF, U+1F3F4, U+E0062-E0063, U+E0065, U+E0067, U+E006C, U+E006E, U+E0073-E0074, U+E0077, U+E007F",
+          }
+        );
+        flagFont
+          .load()
+          .then((font) => document.fonts.add(font))
+          .catch((err) => console.warn("Failed to load flag font:", err));
+      })();
+    </script>
+
     <style>
-      /* Custom scrollbar for a more polished look */
+      /* List the flag font first so it wins for flag codepoints, fallback otherwise. */
+      body {
+        font-family: "Twemoji Country Flags", system-ui, -apple-system,
+          BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+
       ::-webkit-scrollbar {
         width: 8px;
       }
       ::-webkit-scrollbar-track {
-        background: #2d3748; /* gray-800 */
+        background: #2d3748;
       }
       ::-webkit-scrollbar-thumb {
-        background: #718096; /* gray-500 */
+        background: #718096;
         border-radius: 4px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #a0aec0; /* gray-400 */
+        background: #a0aec0;
       }
     </style>
   </head>

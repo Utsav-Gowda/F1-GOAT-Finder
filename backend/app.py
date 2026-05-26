@@ -1,169 +1,190 @@
 # backend/app.py
 
 import os
+from collections import defaultdict
+
+from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from pymongo import MongoClient
-from dotenv import load_dotenv
-from collections import defaultdict
 
-# Load environment variables from a .env file in the 'backend' directory
+from flags import flag_for_country, flag_for_nationality
+
 load_dotenv()
 
 app = Flask(__name__)
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    return response
-# CORS(app, resources={r"/api/*": {"origins": "*"}})
-# CORS(app)#, origins=["http://localhost:5173", "https://arobin09.github.io"])
-# --- Database Connection ---
-MONGO_URI = os.getenv('MONGO_URI')
+
+# ----- CORS configuration -----
+# Add your GitHub Pages URL here once you deploy the frontend.
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://utsav-gowda.github.io",  # <-- update to match your GitHub username
+]
+CORS(app, resources={r"/api/*": {"origins": ALLOWED_ORIGINS}})
+
+
+# ----- Database connection -----
+MONGO_URI = os.getenv("MONGO_URI")
 if MONGO_URI:
     client = MongoClient(MONGO_URI)
-    db = client['f1DB']
-    results_collection = db['results']
-    races_collection = db['races']
+    db = client["f1DB"]
+    results_collection = db["results"]
+    races_collection = db["races"]
+    drivers_collection = db["drivers"]
+    circuits_collection = db["circuits"]
 else:
-    print("Warning: MONGO_URI not found. /api/analyze endpoint will fail.")
-
-# --- Hardcoded Dictionaries for Initial Data ---
-DRIVER_ID_MAP = {
-    "Lewis Hamilton": 1,
-    "Max Verstappen": 830,
-    "Fernando Alonso": 4,
-    "Nico Rosberg": 3,
-    "Ayrton Senna": 102,
-    "Alain Prost": 117,
-    "Kimi Raikkonen": 8,
-    "Sebastian Vettel": 20
-}
-
-CIRCUIT_ID_MAP = {
-    "Monaco, Monte Carlo": 6,
-    "Silverstone, UK": 9,
-    "Spa-Francorchamps, Belgium": 13,
-    "Monza, Italy": 14,
-}
+    print("Warning: MONGO_URI not found. All endpoints will return 500.")
+    results_collection = None
+    races_collection = None
+    drivers_collection = None
+    circuits_collection = None
 
 
-@app.route('/api/initial-data', methods=['GET'])
+def db_ready():
+    return all([results_collection is not None,
+                races_collection is not None,
+                drivers_collection is not None,
+                circuits_collection is not None])
+
+
+# ----- Routes -----
+@app.route("/api/health", methods=["GET"])
+def health():
+    """Used by the keep-warm pinger and for quick deployment checks."""
+    return jsonify({"status": "ok", "db_configured": db_ready()})
+
+
+@app.route("/api/initial-data", methods=["GET"])
 def get_initial_data():
-    return jsonify({
-        'drivers': DRIVER_ID_MAP,
-        'circuits': CIRCUIT_ID_MAP
-    })
+    """Return drivers and circuits with display names and flag emojis."""
+    if not db_ready():
+        return jsonify({"error": "Database not configured on the server."}), 500
 
-
-@app.route('/api/analyze', methods=['POST'])
-def analyze_drivers():
     try:
-        if not MONGO_URI:
-            raise ConnectionError("MongoDB connection not configured.")
+        drivers_cursor = drivers_collection.find(
+            {},
+            {"_id": 0, "driverId": 1, "forename": 1, "surname": 1, "nationality": 1},
+        ).sort([("surname", 1), ("forename", 1)])
 
+        drivers = [
+            {
+                "id": d["driverId"],
+                "name": f"{d['forename']} {d['surname']}",
+                "country": flag_for_nationality(d.get("nationality", "")),
+            }
+            for d in drivers_cursor
+        ]
+
+        circuits_cursor = circuits_collection.find(
+            {},
+            {"_id": 0, "circuitId": 1, "name": 1, "country": 1},
+        ).sort("name", 1)
+
+        circuits = [
+            {
+                "id": c["circuitId"],
+                "name": c["name"],
+                "country": flag_for_country(c.get("country", "")),
+            }
+            for c in circuits_cursor
+        ]
+
+        return jsonify({"drivers": drivers, "circuits": circuits})
+
+    except Exception as e:
+        print(f"Error fetching initial data: {e}")
+        return jsonify({"error": "Failed to fetch initial data."}), 500
+
+
+@app.route("/api/analyze", methods=["POST"])
+def analyze_drivers():
+    """Compute a 0-100 performance score for each selected driver at a circuit."""
+    if not db_ready():
+        return jsonify({"error": "Database not configured on the server."}), 500
+
+    try:
         data = request.get_json()
         if not data:
             return jsonify({"error": "Invalid request body."}), 400
 
-        selected_drivers = data.get('drivers', [])
-        selected_circuit_id = data.get('circuitId')
+        selected_drivers = data.get("drivers", [])
+        selected_circuit_id = data.get("circuitId")
 
         if not selected_drivers or selected_circuit_id is None:
             return jsonify({"error": "Missing 'drivers' or 'circuitId'."}), 400
 
-        # Convert driver IDs to integers
-        driver_ids = [int(driver['id']) for driver in selected_drivers]
-        driver_lookup = {int(driver['id']): driver for driver in selected_drivers}
+        driver_ids = [int(d["id"]) for d in selected_drivers]
+        driver_lookup = {int(d["id"]): d for d in selected_drivers}
 
-        # --- MongoDB Aggregation Pipeline ---
         pipeline = [
             {
                 "$lookup": {
                     "from": "races",
                     "localField": "raceId",
                     "foreignField": "raceId",
-                    "as": "raceInfo"
+                    "as": "raceInfo",
                 }
             },
             {"$unwind": "$raceInfo"},
             {
                 "$match": {
                     "driverId": {"$in": driver_ids},
-                    "raceInfo.circuitId": selected_circuit_id
+                    "raceInfo.circuitId": int(selected_circuit_id),
                 }
             },
-            {
-                "$project": {
-                    "_id": 0,
-                    "driverId": 1,
-                    "position": 1
-                }
-            }
+            {"$project": {"_id": 0, "driverId": 1, "position": 1}},
         ]
 
         results = list(results_collection.aggregate(pipeline))
         if not results:
             return jsonify([])
 
-        # --- Group results by driverId ---
         positions_by_driver = defaultdict(list)
         for result in results:
-            driver_id = result['driverId']
-            pos = result['position']
-            positions_by_driver[driver_id].append(pos)
+            positions_by_driver[result["driverId"]].append(result["position"])
 
-        # --- Scoring Function (0–100 based on position) ---
         def calculate_score(positions):
+            """Score = 100 - 5 * avg_finishing_position - 5 * dnf_count, clamped [0, 100]."""
             numeric_positions = []
             dnf_count = 0
-
             for pos in positions:
                 if pos == "\\N":
                     dnf_count += 1
                 else:
                     try:
                         numeric_positions.append(int(pos))
-                    except ValueError:
+                    except (ValueError, TypeError):
                         dnf_count += 1
 
             if not numeric_positions and dnf_count == 0:
                 return 0
 
-            avg_position = sum(numeric_positions) / len(numeric_positions) if numeric_positions else 20
-
-            # Custom scoring formula
+            avg_position = (
+                sum(numeric_positions) / len(numeric_positions)
+                if numeric_positions else 20
+            )
             score = 100 - (avg_position * 5) - (dnf_count * 5)
             return max(0, min(100, round(score, 2)))
 
-        # --- Score each driver ---
-        scored_results = []
+        scored = []
         for driver_id, positions in positions_by_driver.items():
             driver_info = driver_lookup.get(driver_id)
-            if not driver_info:
-                continue
+            if driver_info:
+                scored.append({
+                    "driver": driver_info,
+                    "score": calculate_score(positions),
+                    "races": len(positions),
+                })
 
-            score = calculate_score(positions)
-            scored_results.append({
-                "driver": driver_info,
-                "score": score
-            })
+        ranked = sorted(scored, key=lambda x: x["score"], reverse=True)
+        return jsonify([{**r, "rank": i + 1} for i, r in enumerate(ranked)])
 
-        # --- Rank the results ---
-        ranked = sorted(scored_results, key=lambda x: x['score'], reverse=True)
-        final_results_with_rank = [{**result, "rank": i + 1} for i, result in enumerate(ranked)]
-
-        return jsonify(final_results_with_rank)
-
-    except ConnectionError as ce:
-        print(f"Connection Error during analysis: {ce}")
-        return jsonify({"error": "Database connection is not configured on the server."}), 500
     except Exception as e:
         print(f"Error during analysis: {e}")
         return jsonify({"error": "An unexpected error occurred during analysis."}), 500
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port, debug=True)
