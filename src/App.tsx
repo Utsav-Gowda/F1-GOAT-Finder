@@ -6,7 +6,7 @@ import { ResultsDisplay } from './components/ResultsDisplay';
 import { Driver, Circuit, DriverScore } from './types';
 
 const API_BASE_URL = import.meta.env.PROD
-  ? 'https://YOUR-RENDER-URL.onrender.com'  // <-- update after deploying backend
+  ? 'https://f1-goat-backend-v1eb.onrender.com'  // <-- update after deploying backend
   : 'http://127.0.0.1:5000';
 
 // Names used to find the default drivers and circuit for the on-load demo.
