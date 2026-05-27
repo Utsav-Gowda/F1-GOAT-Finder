@@ -1,5 +1,6 @@
 Flask
 Flask-Cors
-pymongo[srv]
+pymongo[srv]>=4.6
 python-dotenv
 gunicorn
+certifi

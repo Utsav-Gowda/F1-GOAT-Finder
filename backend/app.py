@@ -1,6 +1,7 @@
 # backend/app.py
 
 import os
+import certifi
 from collections import defaultdict
 
 from dotenv import load_dotenv
@@ -26,7 +27,7 @@ CORS(app, resources={r"/api/*": {"origins": ALLOWED_ORIGINS}})
 # ----- Database connection -----
 MONGO_URI = os.getenv("MONGO_URI")
 if MONGO_URI:
-    client = MongoClient(MONGO_URI)
+    client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
     db = client["f1DB"]
     results_collection = db["results"]
     races_collection = db["races"]
