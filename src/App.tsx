@@ -9,6 +9,13 @@ const API_BASE_URL = import.meta.env.PROD
   ? 'https://YOUR-RENDER-URL.onrender.com'  // <-- update after deploying backend
   : 'http://127.0.0.1:5000';
 
+// Names used to find the default drivers and circuit for the on-load demo.
+// Picking three universally recognized "F1 GOAT" names at the sport's most
+// iconic circuit gives a strong first impression — the recruiter sees real
+// rankings within a second of loading the page.
+const DEFAULT_DRIVER_NAMES = ['Lewis Hamilton', 'Max Verstappen', 'Michael Schumacher'];
+const DEFAULT_CIRCUIT_NAME = 'Circuit de Monaco';
+
 const App: React.FC = () => {
   const [allDrivers, setAllDrivers] = useState<Driver[]>([]);
   const [allCircuits, setAllCircuits] = useState<Circuit[]>([]);
@@ -20,9 +27,12 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isDataLoading, setIsDataLoading] = useState<boolean>(true);
 
-  // Split error states: fetchError blocks the whole form; analyzeError doesn't.
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+
+  // Tracks whether we've already auto-run the demo analysis, so it only
+  // happens once per session (not on every state change).
+  const [hasAutoAnalyzed, setHasAutoAnalyzed] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -35,19 +45,27 @@ const App: React.FC = () => {
         }
         const data = await response.json();
 
-        // Backend sends drivers as objects with numeric IDs; we cast to string
-        // because the Driver interface uses string IDs throughout the UI.
         const drivers: Driver[] = (data.drivers || []).map((d: any) => ({
           id: String(d.id),
           name: d.name,
           country: d.country,
         }));
-
         const circuits: Circuit[] = data.circuits || [];
 
         setAllDrivers(drivers);
         setAllCircuits(circuits);
-        if (circuits.length > 0) {
+
+        // Pre-select the demo lineup if every default is present in the data.
+        const defaultDrivers = DEFAULT_DRIVER_NAMES
+          .map((name) => drivers.find((d) => d.name === name))
+          .filter((d): d is Driver => d !== undefined);
+        const defaultCircuit = circuits.find((c) => c.name === DEFAULT_CIRCUIT_NAME);
+
+        if (defaultDrivers.length >= 2 && defaultCircuit) {
+          setSelectedDrivers(defaultDrivers);
+          setSelectedCircuit(defaultCircuit.id);
+        } else if (circuits.length > 0) {
+          // Fallback: at least select a circuit so the dropdown isn't empty.
           setSelectedCircuit(circuits[0].id);
         }
       } catch (err) {
@@ -93,6 +111,21 @@ const App: React.FC = () => {
       setIsLoading(false);
     }
   }, [selectedDrivers, selectedCircuit]);
+
+  // Auto-run the analysis once the default selections are in place.
+  // This fires exactly once because of the hasAutoAnalyzed guard.
+  useEffect(() => {
+    if (
+      !hasAutoAnalyzed &&
+      !isDataLoading &&
+      !fetchError &&
+      selectedDrivers.length >= 2 &&
+      selectedCircuit > 0
+    ) {
+      setHasAutoAnalyzed(true);
+      handleAnalyze();
+    }
+  }, [hasAutoAnalyzed, isDataLoading, fetchError, selectedDrivers, selectedCircuit, handleAnalyze]);
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 font-sans p-4 sm:p-6 lg:p-8">
