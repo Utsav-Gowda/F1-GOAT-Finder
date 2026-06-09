@@ -5,7 +5,7 @@ A full-stack web app that ranks Formula 1 drivers based on their historical perf
 ## **Live Demo**
 https://utsav-gowda.github.io/F1-GOAT-Finder/
 
-**Full Tech Stack**
+**Full Tech Stack:**
 React, Typescript, Vite, Tailwind, Flask, MongoDB Atlas, Render, GitHub Pages.
 
 
@@ -63,9 +63,9 @@ After Steelhacks, I kept working on this app solo to build out the features I ha
 
 **Rewrote the scoring algorithm** - The hackathon version was a simple linear average. The new version:
 
-    - Normalizes by field size so 5th in a modern 22-car grid outscores 5th in an 8-car 1950s grid.
-    - Adds podium bonuses (+15 for a win, +5 for P2 or P3) because the gap between 1st and second matters a lot more than the gap between 14th and 15th.
-    - Applies a sample-size confidence factor. Bayesian-style shrinkage toward a neutral score when a driver has only a few races at the circuit, so a single lucky win doesn't make somebody the GOAT of a track.
+  - Normalizes by field size so 5th in a modern 22-car grid outscores 5th in an 8-car 1950s grid.
+  - Adds podium bonuses (+15 for a win, +5 for P2 or P3) because the gap between 1st and second matters a lot more than the gap between 14th and 15th.
+  - Applies a sample-size confidence factor. Bayesian-style shrinkage toward a neutral score when a driver has only a few races at the circuit, so a single lucky win doesn't make somebody the GOAT of a track.
 
 
 **Cross-platform flag rendering** - Windows browsers don't render flag emojis natively (they show as "GB" or "US" in letter codes), so instead I built a small 'Flag' component that converts emoji characters to Twemoji SVG images via a CDN; this works identically on every OS.
