@@ -3,9 +3,9 @@ A full-stack web app that ranks Formula 1 drivers based on their historical perf
 
 
 ## **Live Demo**
-https://utsav-gowda.github.io/F1-GOAT-Finder/
+**https://utsav-gowda.github.io/F1-GOAT-Finder/**
 
-**Full Tech Stack:**
+**Full Tech Stack -**
 React, Typescript, Vite, Tailwind, Flask, MongoDB Atlas, Render, GitHub Pages.
 
 
